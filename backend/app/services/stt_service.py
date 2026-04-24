@@ -22,8 +22,22 @@ class STTService:
             )
         return STTService._model
 
+    @staticmethod
+    def _audio_suffix(data: bytes) -> str:
+        """Infer file extension from magic bytes so ffmpeg can probe correctly."""
+        if len(data) >= 4 and data[:4] == b"RIFF":
+            return ".wav"
+        if len(data) >= 4 and data[:4] == b"\x1a\x45\xdf\xa3":
+            return ".webm"
+        if len(data) >= 3 and data[:3] == b"ID3":
+            return ".mp3"
+        if len(data) >= 4 and data[:4] == b"OggS":
+            return ".ogg"
+        return ".bin"
+
     async def transcribe(self, audio_bytes: bytes, vad_filter: bool = True) -> str:
-        src = tempfile.NamedTemporaryFile(delete=False, suffix=".audio")
+        suffix = self._audio_suffix(audio_bytes)
+        src = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         dst_path = src.name + ".wav"
         try:
             src.write(audio_bytes)

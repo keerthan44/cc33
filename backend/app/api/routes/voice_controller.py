@@ -38,9 +38,12 @@ async def voice_stream(
             if "bytes" in message:
                 chunk: bytes = message["bytes"]
                 chunks.append(chunk)
-                partial = await stt.transcribe(chunk, vad_filter=True)
-                if partial:
-                    await websocket.send_json({"type": "partial", "text": partial})
+                # MediaRecorder sends fragmented WebM: only the first chunk has the
+                # EBML container header; subsequent chunks are raw cluster data and
+                # cannot be decoded by ffmpeg independently. We acknowledge receipt
+                # so the client knows we're still alive, but transcription only
+                # happens on the fully assembled audio at stop time.
+                await websocket.send_json({"type": "recording", "chunks": len(chunks)})
             elif "text" in message:
                 data = json.loads(message["text"])
                 if data.get("type") == "stop":

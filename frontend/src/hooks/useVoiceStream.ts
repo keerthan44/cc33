@@ -27,6 +27,7 @@ const INITIAL_STATE: StreamState = {
 
 type WsMessage =
   | { type: "ready" }
+  | { type: "recording"; chunks: number }
   | { type: "partial"; text: string }
   | { type: "final"; transcript: string }
   | { type: "intent"; intent: IntentType }
@@ -81,6 +82,10 @@ export function useVoiceStream() {
             recorder.start(2000)
             break
           }
+          case "recording":
+            // Server acknowledged a chunk; show a live counter as the partial indicator.
+            setState((s) => ({ ...s, partialText: `Recording… (${msg.chunks} chunks)` }))
+            break
           case "partial":
             setState((s) => ({ ...s, partialText: msg.text }))
             break
