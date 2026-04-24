@@ -66,7 +66,10 @@ class NoteService:
     ) -> list[TaskResponse]:
         if not intent.task_identifier or not intent.new_status:
             return []
-        matches = await self._task_repo.search_by_title(intent.task_identifier)
+        matches = await self._task_repo.search_by_title(
+            intent.task_identifier,
+            due_date=intent.task_due_date,
+        )
         if not matches:
             return []
         task = matches[0]

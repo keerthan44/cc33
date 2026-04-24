@@ -19,6 +19,10 @@ _SYSTEM_PROMPT = (
     "For CREATE_TASK: extract EVERY distinct task the user mentions into the tasks array — "
     "even if they mention two, three, or more things to do, each becomes its own TaskIntent. "
     "Never merge multiple actions into one task. "
+    "For UPDATE_TASK_STATUS: set task_identifier to the keyword that names the task. "
+    "If the user also mentions a date to identify WHICH task they mean "
+    "(e.g. 'the dentist appointment tomorrow'), resolve that date and put it in task_due_date — "
+    "this is used to disambiguate between tasks with similar names, not to change the due date. "
     "For other intents the tasks array should be empty. "
     "Return null for optional fields not mentioned."
 )

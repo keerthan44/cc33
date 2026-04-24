@@ -37,8 +37,9 @@ class ExtractedIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     intent: IntentType
-    tasks: list[TaskIntent] = []        # one or more tasks for CREATE_TASK intent
-    task_identifier: str | None = None  # which task to update for UPDATE_TASK_STATUS
+    tasks: list[TaskIntent] = []         # one or more tasks for CREATE_TASK
+    task_identifier: str | None = None   # keyword identifying which task to update
+    task_due_date: date | None = None    # optional due-date disambiguator for UPDATE_TASK_STATUS
     new_status: TaskStatus | None = None
     filters: TaskQueryFilters | None = None
 

@@ -58,11 +58,24 @@ class TaskRepository:
         )
         return list(rows.scalars().all()), total
 
-    async def search_by_title(self, keyword: str, limit: int = 5) -> list[Task]:
-        """Case-insensitive partial match on title — used by UPDATE_TASK_STATUS intent."""
+    async def search_by_title(
+        self,
+        keyword: str,
+        due_date: date | None = None,
+        limit: int = 5,
+    ) -> list[Task]:
+        """Case-insensitive title match with optional due-date narrowing.
+
+        When due_date is supplied the query filters to tasks on that exact date,
+        so 'dentist appointment tomorrow' never matches 'dentist appointment next week'.
+        """
+        conditions = [Task.title.ilike(f"%{keyword}%")]
+        if due_date is not None:
+            conditions.append(Task.due_date == due_date)
+
         result = await self._db.execute(
             select(Task)
-            .where(Task.title.ilike(f"%{keyword}%"))
+            .where(and_(*conditions))
             .order_by(Task.created_at.desc())
             .limit(limit)
         )
