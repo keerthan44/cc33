@@ -39,19 +39,34 @@ export function TaskList({ refreshTrigger = 0 }: TaskListProps) {
 
   return (
     <section aria-labelledby="tasks-heading">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2 mb-4">
         <h2 id="tasks-heading" className="text-lg font-semibold text-gray-900">
-          Tasks{" "}
-          {!loading && (
-            <span
-              className="text-sm font-normal text-gray-500"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              ({total})
-            </span>
-          )}
+          Tasks
         </h2>
+        {!loading && (
+          <span
+            className="text-sm font-normal text-gray-500"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            ({total})
+          </span>
+        )}
+        {loading && (
+          <span className="flex items-center gap-1.5 text-xs text-indigo-500" aria-live="polite">
+            <svg
+              aria-hidden="true"
+              className="animate-spin h-3.5 w-3.5"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Refreshing…
+          </span>
+        )}
       </div>
 
       <div className="flex gap-2 mb-4" role="group" aria-label="Filter tasks">
@@ -88,7 +103,7 @@ export function TaskList({ refreshTrigger = 0 }: TaskListProps) {
         </select>
       </div>
 
-      {loading && (
+      {loading && tasks.length === 0 && (
         <div role="status" aria-label="Loading tasks" className="space-y-3">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-24 rounded-lg bg-gray-100 animate-pulse" />

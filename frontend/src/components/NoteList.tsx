@@ -1,28 +1,43 @@
 "use client"
 
+import { useEffect } from "react"
 import { useNotes } from "@/hooks/useNotes"
 
-export function NoteList() {
-  const { notes, total, loading, error } = useNotes()
+interface NoteListProps {
+  refreshTrigger?: number
+}
+
+export function NoteList({ refreshTrigger = 0 }: NoteListProps) {
+  const { notes, total, loading, error, refetch } = useNotes()
+
+  useEffect(() => {
+    if (refreshTrigger > 0) refetch()
+  }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <section aria-labelledby="notes-heading" className="mt-8">
-      <h2 id="notes-heading" className="text-lg font-semibold text-gray-900 mb-4">
-        Recent Notes{" "}
+    <section aria-labelledby="notes-heading">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 id="notes-heading" className="text-lg font-semibold text-gray-900">
+          Recent Notes
+        </h2>
         {!loading && (
           <span className="text-sm font-normal text-gray-500" aria-live="polite">
             ({total})
           </span>
         )}
-      </h2>
-
-      {loading && (
-        <div role="status" aria-label="Loading notes" className="space-y-2">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
-          ))}
-        </div>
-      )}
+        {loading && (
+          <svg
+            aria-label="Refreshing notes"
+            className="animate-spin h-4 w-4 text-gray-400"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+        )}
+      </div>
 
       {error && (
         <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-md p-3">

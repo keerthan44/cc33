@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from "react"
 import { MicButton } from "@/components/MicButton"
 import { TranscriptDisplay } from "@/components/TranscriptDisplay"
 import { TaskList } from "@/components/TaskList"
+import { NoteList } from "@/components/NoteList"
 import { useVoiceStream } from "@/hooks/useVoiceStream"
+
+const REFRESH_DELAY_MS = 800
 
 export default function DashboardPage() {
   const {
@@ -18,13 +21,17 @@ export default function DashboardPage() {
     stop,
   } = useVoiceStream()
 
-  const [taskRefreshTrigger, setTaskRefreshTrigger] = useState(0)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const prevStatus = useRef(status)
 
   useEffect(() => {
-    // Refetch tasks whenever a recording session completes.
     if (prevStatus.current !== "done" && status === "done") {
-      setTaskRefreshTrigger((n) => n + 1)
+      // Delay so the backend DB write is committed before we fetch
+      const timer = setTimeout(
+        () => setRefreshTrigger((n) => n + 1),
+        REFRESH_DELAY_MS,
+      )
+      return () => clearTimeout(timer)
     }
     prevStatus.current = status
   }, [status])
@@ -38,6 +45,7 @@ export default function DashboardPage() {
         </p>
       </header>
 
+      {/* Top row: mic + tasks side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-gray-700 mb-6">Record</h2>
@@ -54,8 +62,13 @@ export default function DashboardPage() {
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <TaskList refreshTrigger={taskRefreshTrigger} />
+          <TaskList refreshTrigger={refreshTrigger} />
         </div>
+      </div>
+
+      {/* Full-width notes table below */}
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <NoteList refreshTrigger={refreshTrigger} />
       </div>
     </main>
   )
