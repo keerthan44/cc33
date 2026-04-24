@@ -20,7 +20,7 @@ interface TranscriptDisplayProps {
   partialText: string
   finalTranscript: string
   intent: IntentType | null
-  task: Task | null
+  tasks: Task[]
   error: string | null
 }
 
@@ -28,7 +28,7 @@ export function TranscriptDisplay({
   partialText,
   finalTranscript,
   intent,
-  task,
+  tasks,
   error,
 }: TranscriptDisplayProps) {
   return (
@@ -64,21 +64,35 @@ export function TranscriptDisplay({
         </span>
       )}
 
-      {task && intent === "CREATE_TASK" && (
+      {tasks.length > 0 && intent === "CREATE_TASK" && (
         <div
-          className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"
           role="region"
-          aria-label="Created task"
+          aria-label={`${tasks.length} task${tasks.length > 1 ? "s" : ""} created`}
+          className="space-y-2"
         >
-          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">
-            Task created
+          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+            {tasks.length === 1 ? "Task created" : `${tasks.length} tasks created`}
           </p>
-          <p className="text-sm font-medium text-gray-900">{task.title}</p>
-          {task.due_date && (
-            <p className="text-xs text-gray-500 mt-1">
-              Due: <time dateTime={task.due_date}>{task.due_date}</time>
-            </p>
-          )}
+          {tasks.map((task) => (
+            <div
+              key={task.id}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"
+            >
+              <p className="text-sm font-medium text-gray-900">{task.title}</p>
+              <div className="flex items-center gap-3 mt-1">
+                {task.priority && (
+                  <span className="text-xs text-emerald-700 font-medium">
+                    {task.priority}
+                  </span>
+                )}
+                {task.due_date && (
+                  <p className="text-xs text-gray-500">
+                    Due: <time dateTime={task.due_date}>{task.due_date}</time>
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

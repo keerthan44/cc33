@@ -28,30 +28,31 @@ class NoteService:
         self, transcript: str, source: str
     ) -> TranscribeResponse:
         intent: ExtractedIntent = await self._intent.extract_intent(transcript)
-        task_response: TaskResponse | None = None
+        task_responses: list[TaskResponse] = []
 
-        if intent.intent == IntentType.CREATE_TASK and intent.title:
-            task = Task(
-                title=intent.title,
-                description=intent.description,
-                status=TaskStatus.PENDING.value,
-                priority=intent.priority.value if intent.priority else None,
-                due_date=intent.due_date,
-            )
-            created_task = await self._task_repo.create(task)
-            task_response = TaskResponse.model_validate(created_task)
+        if intent.intent == IntentType.CREATE_TASK and intent.tasks:
+            for task_intent in intent.tasks:
+                task = Task(
+                    title=task_intent.title,
+                    description=task_intent.description,
+                    status=TaskStatus.PENDING.value,
+                    priority=task_intent.priority.value if task_intent.priority else None,
+                    due_date=task_intent.due_date,
+                )
+                created = await self._task_repo.create(task)
+                task_responses.append(TaskResponse.model_validate(created))
 
         note = Note(
             raw_transcript=transcript,
             source=source,
-            task_id=task_response.id if task_response else None,
+            task_id=task_responses[0].id if task_responses else None,
         )
         created_note = await self._note_repo.create(note)
 
         return TranscribeResponse(
             note=NoteResponse.model_validate(created_note),
             intent=intent.intent,
-            action=ActionResult(type=intent.intent.value, task=task_response),
+            action=ActionResult(type=intent.intent.value, tasks=task_responses),
         )
 
     async def get_note(self, note_id: str) -> NoteResponse:

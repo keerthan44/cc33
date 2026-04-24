@@ -12,7 +12,7 @@ export default function DashboardPage() {
     partialText,
     finalTranscript,
     intent,
-    task,
+    tasks,
     error,
     start,
     stop,
@@ -47,7 +47,7 @@ export default function DashboardPage() {
               partialText={partialText}
               finalTranscript={finalTranscript}
               intent={intent}
-              task={task}
+              tasks={tasks}
               error={error}
             />
           </div>

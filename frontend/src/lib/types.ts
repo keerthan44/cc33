@@ -28,7 +28,7 @@ export interface Note {
 
 export interface ActionResult {
   type: string
-  task?: Task
+  tasks: Task[]
 }
 
 export interface TranscribeResponse {

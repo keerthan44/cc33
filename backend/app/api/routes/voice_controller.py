@@ -56,10 +56,10 @@ async def voice_stream(
                         "type": "note",
                         "note": result.note.model_dump(mode="json"),
                     })
-                    if result.action.task:
+                    if result.action.tasks:
                         await websocket.send_json({
-                            "type": "task",
-                            "task": result.action.task.model_dump(mode="json"),
+                            "type": "tasks",
+                            "tasks": [t.model_dump(mode="json") for t in result.action.tasks],
                         })
                     await websocket.send_json({"type": "done"})
                     break

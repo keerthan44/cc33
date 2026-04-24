@@ -20,24 +20,32 @@ class TaskQueryFilters(BaseModel):
     due_after: str | None = None
 
 
+class TaskIntent(BaseModel):
+    """A single task extracted from the transcript. Multiple may appear in one utterance."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    description: str | None = None
+    due_date: date | None = None
+    priority: TaskPriority | None = None
+
+
 class ExtractedIntent(BaseModel):
     """Structured LLM output. extra='forbid' satisfies OpenAI strict-mode schema requirements."""
 
     model_config = ConfigDict(extra="forbid")
 
     intent: IntentType
-    title: str | None = None
-    description: str | None = None
-    due_date: date | None = None
-    priority: TaskPriority | None = None
-    task_identifier: str | None = None
+    tasks: list[TaskIntent] = []        # one or more tasks for CREATE_TASK intent
+    task_identifier: str | None = None  # which task to update for UPDATE_TASK_STATUS
     new_status: TaskStatus | None = None
     filters: TaskQueryFilters | None = None
 
 
 class ActionResult(BaseModel):
     type: str
-    task: TaskResponse | None = None
+    tasks: list[TaskResponse] = []
 
 
 class TranscribeResponse(BaseModel):

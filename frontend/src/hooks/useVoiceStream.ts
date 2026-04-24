@@ -10,7 +10,7 @@ interface StreamState {
   partialText: string
   finalTranscript: string
   intent: IntentType | null
-  task: Task | null
+  tasks: Task[]
   note: Note | null
   error: string | null
 }
@@ -20,7 +20,7 @@ const INITIAL_STATE: StreamState = {
   partialText: "",
   finalTranscript: "",
   intent: null,
-  task: null,
+  tasks: [],
   note: null,
   error: null,
 }
@@ -31,7 +31,7 @@ type WsMessage =
   | { type: "partial"; text: string }
   | { type: "final"; transcript: string }
   | { type: "intent"; intent: IntentType }
-  | { type: "task"; task: Task }
+  | { type: "tasks"; tasks: Task[] }
   | { type: "note"; note: Note }
   | { type: "done" }
 
@@ -108,8 +108,8 @@ export function useVoiceStream() {
           case "intent":
             setState((s) => ({ ...s, intent: msg.intent }))
             break
-          case "task":
-            setState((s) => ({ ...s, task: msg.task }))
+          case "tasks":
+            setState((s) => ({ ...s, tasks: msg.tasks }))
             break
           case "note":
             setState((s) => ({ ...s, note: msg.note }))

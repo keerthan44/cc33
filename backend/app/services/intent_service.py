@@ -13,10 +13,14 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are an intent extraction engine for a voice note-taking app. "
-    "Extract intent from the transcript and return structured data. "
     "Today is {today}. Resolve all relative dates (e.g. 'tomorrow', 'next Friday') "
     "to absolute YYYY-MM-DD dates. "
-    "Return null for any field not mentioned or inferable from the transcript."
+    "Classify the overall intent as one of: CREATE_TASK, UPDATE_TASK_STATUS, QUERY_TASKS, GENERAL_NOTE. "
+    "For CREATE_TASK: extract EVERY distinct task the user mentions into the tasks array — "
+    "even if they mention two, three, or more things to do, each becomes its own TaskIntent. "
+    "Never merge multiple actions into one task. "
+    "For other intents the tasks array should be empty. "
+    "Return null for optional fields not mentioned."
 )
 
 
