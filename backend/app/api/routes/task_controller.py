@@ -12,6 +12,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 @router.get("", response_model=PaginatedTaskResponse, status_code=200)
 async def list_tasks(
+    keyword: str | None = Query(default=None),
     status: TaskStatus | None = Query(default=None),
     priority: TaskPriority | None = Query(default=None),
     due_before: date | None = Query(default=None),
@@ -21,7 +22,7 @@ async def list_tasks(
     service: TaskService = Depends(get_task_service),
 ) -> PaginatedTaskResponse:
     return await service.list_tasks(
-        status=status, priority=priority,
+        keyword=keyword, status=status, priority=priority,
         due_before=due_before, due_after=due_after,
         page=page, page_size=page_size,
     )

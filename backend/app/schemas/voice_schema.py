@@ -10,14 +10,20 @@ from app.schemas.task_schema import TaskResponse
 
 
 class TaskQueryFilters(BaseModel):
-    """Typed filters for QUERY_TASKS intent — keeps OpenAI strict-mode happy."""
+    """Filters for QUERY_TASKS intent. All fields are optional and combinable.
+
+    `keyword` drives a partial-text search on task titles so the user can say
+    "show me the dentist task" without knowing the exact title — the DB returns
+    the closest match and the result can be used to drive a follow-up update.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
+    keyword: str | None = None      # partial title match — ILIKE %keyword%
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
-    due_before: str | None = None
-    due_after: str | None = None
+    due_before: str | None = None   # YYYY-MM-DD upper bound
+    due_after: str | None = None    # YYYY-MM-DD lower bound
 
 
 class TaskIntent(BaseModel):

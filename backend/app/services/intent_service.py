@@ -23,6 +23,11 @@ _SYSTEM_PROMPT = (
     "If the user also mentions a date to identify WHICH task they mean "
     "(e.g. 'the dentist appointment tomorrow'), resolve that date and put it in task_due_date — "
     "this is used to disambiguate between tasks with similar names, not to change the due date. "
+    "For QUERY_TASKS: populate the filters object with any combination of: "
+    "keyword (partial title text — e.g. 'dentist', 'PR', 'meeting'), "
+    "status, priority, due_before, due_after. "
+    "Use keyword when the user names or describes a specific task without knowing its exact title. "
+    "The keyword drives a partial-text search so the DB returns the closest matching rows. "
     "For other intents the tasks array should be empty. "
     "Return null for optional fields not mentioned."
 )

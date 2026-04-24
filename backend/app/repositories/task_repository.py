@@ -27,6 +27,7 @@ class TaskRepository:
 
     async def list(
         self,
+        keyword: str | None = None,
         status: TaskStatus | None = None,
         priority: TaskPriority | None = None,
         due_before: date | None = None,
@@ -35,6 +36,8 @@ class TaskRepository:
         page_size: int = 20,
     ) -> tuple[list[Task], int]:
         conditions = []
+        if keyword:
+            conditions.append(Task.title.ilike(f"%{keyword}%"))
         if status:
             conditions.append(Task.status == status.value)
         if priority:

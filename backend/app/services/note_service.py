@@ -84,11 +84,17 @@ class NoteService:
 
     async def _handle_query(self, intent: ExtractedIntent) -> list[TaskResponse]:
         f = intent.filters
+        keyword = f.keyword if f else None
         status = TaskStatus(f.status.value) if f and f.status else None
         priority = TaskPriority(f.priority.value) if f and f.priority else None
+        due_before = date.fromisoformat(f.due_before) if f and f.due_before else None
+        due_after = date.fromisoformat(f.due_after) if f and f.due_after else None
         items, _ = await self._task_repo.list(
+            keyword=keyword,
             status=status,
             priority=priority,
+            due_before=due_before,
+            due_after=due_after,
             page=1,
             page_size=10,
         )

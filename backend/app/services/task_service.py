@@ -36,6 +36,7 @@ class TaskService:
 
     async def list_tasks(
         self,
+        keyword: str | None = None,
         status: TaskStatus | None = None,
         priority: TaskPriority | None = None,
         due_before: date | None = None,
@@ -44,6 +45,7 @@ class TaskService:
         page_size: int = 20,
     ) -> PaginatedTaskResponse:
         items, total = await self._repo.list(
+            keyword=keyword,
             status=status,
             priority=priority,
             due_before=due_before,
