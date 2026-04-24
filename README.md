@@ -6,6 +6,7 @@ AI-powered voice note-taking and task management. Speak a task, Whisper transcri
 
 - Python 3.11+
 - Node.js 20+
+- [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - ffmpeg (`brew install ffmpeg` / `apt install ffmpeg`)
 - An OpenAI API key
 
@@ -13,10 +14,10 @@ AI-powered voice note-taking and task management. Speak a task, Whisper transcri
 
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv venv && source .venv/bin/activate
+uv pip install -r requirements.txt
 cp .env.example .env          # fill in OPENAI_API_KEY
-uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
 > First request is slow — faster-whisper downloads the model (~150 MB for `base`) on first call.
@@ -35,7 +36,7 @@ Open http://localhost:3000.
 ## Generate a test audio file
 
 ```bash
-python samples/generate_sample.py
+uv run python samples/generate_sample.py
 ```
 
 ## Sample curl
