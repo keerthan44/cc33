@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import { MicButton } from "@/components/MicButton"
 import { TranscriptDisplay } from "@/components/TranscriptDisplay"
 import { TaskList } from "@/components/TaskList"
@@ -16,6 +17,17 @@ export default function DashboardPage() {
     start,
     stop,
   } = useVoiceStream()
+
+  const [taskRefreshTrigger, setTaskRefreshTrigger] = useState(0)
+  const prevStatus = useRef(status)
+
+  useEffect(() => {
+    // Refetch tasks whenever a recording session completes.
+    if (prevStatus.current !== "done" && status === "done") {
+      setTaskRefreshTrigger((n) => n + 1)
+    }
+    prevStatus.current = status
+  }, [status])
 
   return (
     <main className="mx-auto max-w-6xl px-4 sm:px-6 py-10">
@@ -42,7 +54,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <TaskList />
+          <TaskList refreshTrigger={taskRefreshTrigger} />
         </div>
       </div>
     </main>

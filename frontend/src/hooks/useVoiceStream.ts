@@ -47,12 +47,25 @@ export function useVoiceStream() {
   const streamRef = useRef<MediaStream | null>(null)
 
   const stop = useCallback(() => {
-    if (recorderRef.current?.state !== "inactive") {
-      recorderRef.current?.stop()
+    const recorder = recorderRef.current
+    const ws = wsRef.current
+    if (!recorder || !ws) return
+
+    const sendStop = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "stop" }))
+        setState((s) => ({ ...s, status: "processing" }))
+      }
     }
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "stop" }))
-      setState((s) => ({ ...s, status: "processing" }))
+
+    if (recorder.state !== "inactive") {
+      // Wait for the final ondataavailable flush before sending stop,
+      // otherwise the last audio chunk arrives at the server after the
+      // stop signal and gets dropped.
+      recorder.onstop = sendStop
+      recorder.stop()
+    } else {
+      sendStop()
     }
   }, [])
 

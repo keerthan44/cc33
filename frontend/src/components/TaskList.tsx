@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTasks } from "@/hooks/useTasks"
 import { TaskCard } from "./TaskCard"
 import type { Task, TaskPriority, TaskStatus } from "@/lib/types"
@@ -20,14 +20,22 @@ const PRIORITY_OPTIONS: Array<{ value: TaskPriority | ""; label: string }> = [
   { value: "HIGH", label: "High" },
 ]
 
-export function TaskList() {
+interface TaskListProps {
+  refreshTrigger?: number
+}
+
+export function TaskList({ refreshTrigger = 0 }: TaskListProps) {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "">("")
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "">("")
 
-  const { tasks, total, loading, error, updateTask, deleteTask } = useTasks({
+  const { tasks, total, loading, error, updateTask, deleteTask, refetch } = useTasks({
     status: statusFilter || undefined,
     priority: priorityFilter || undefined,
   })
+
+  useEffect(() => {
+    if (refreshTrigger > 0) refetch()
+  }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section aria-labelledby="tasks-heading">
