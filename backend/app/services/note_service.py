@@ -31,7 +31,12 @@ class NoteService:
         task_responses: list[TaskResponse] = []
 
         if intent.intent == IntentType.CREATE_TASK and intent.tasks:
+            seen: set[str] = set()
             for task_intent in intent.tasks:
+                key = task_intent.title.strip().lower()
+                if key in seen:
+                    continue
+                seen.add(key)
                 task = Task(
                     title=task_intent.title,
                     description=task_intent.description,

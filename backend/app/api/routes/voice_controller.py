@@ -32,6 +32,7 @@ async def voice_stream(
     await websocket.accept()
     await websocket.send_json({"type": "ready"})
     chunks: list[bytes] = []
+    stop_received: bool = False
     try:
         while True:
             message = await websocket.receive()
@@ -46,7 +47,8 @@ async def voice_stream(
                 await websocket.send_json({"type": "recording", "chunks": len(chunks)})
             elif "text" in message:
                 data = json.loads(message["text"])
-                if data.get("type") == "stop":
+                if data.get("type") == "stop" and not stop_received:
+                    stop_received = True
                     combined = b"".join(chunks)
                     final_text = await stt.transcribe(combined, vad_filter=False)
                     result = await note_service.create_from_transcript(final_text, "voice")
