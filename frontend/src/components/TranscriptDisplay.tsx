@@ -24,6 +24,39 @@ interface TranscriptDisplayProps {
   error: string | null
 }
 
+function TaskChip({ task, variant }: { task: Task; variant: "created" | "updated" | "found" }) {
+  const colors = {
+    created: "border-emerald-200 bg-emerald-50",
+    updated: "border-blue-200 bg-blue-50",
+    found: "border-amber-200 bg-amber-50",
+  }
+  const statusColors: Record<string, string> = {
+    PENDING: "text-yellow-700",
+    IN_PROGRESS: "text-blue-700",
+    COMPLETED: "text-emerald-700",
+    CANCELLED: "text-gray-500",
+  }
+
+  return (
+    <div className={`rounded-lg border p-3 ${colors[variant]}`}>
+      <p className="text-sm font-medium text-gray-900">{task.title}</p>
+      <div className="flex items-center gap-3 mt-1 flex-wrap">
+        <span className={`text-xs font-medium ${statusColors[task.status] ?? "text-gray-600"}`}>
+          {task.status.replace("_", " ")}
+        </span>
+        {task.priority && (
+          <span className="text-xs text-gray-500">{task.priority}</span>
+        )}
+        {task.due_date && (
+          <span className="text-xs text-gray-500">
+            Due <time dateTime={task.due_date}>{task.due_date}</time>
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function TranscriptDisplay({
   partialText,
   finalTranscript,
@@ -64,36 +97,50 @@ export function TranscriptDisplay({
         </span>
       )}
 
-      {tasks.length > 0 && intent === "CREATE_TASK" && (
-        <div
-          role="region"
-          aria-label={`${tasks.length} task${tasks.length > 1 ? "s" : ""} created`}
-          className="space-y-2"
-        >
+      {/* CREATE_TASK results */}
+      {intent === "CREATE_TASK" && tasks.length > 0 && (
+        <div role="region" aria-label={`${tasks.length} task${tasks.length > 1 ? "s" : ""} created`} className="space-y-2">
           <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
             {tasks.length === 1 ? "Task created" : `${tasks.length} tasks created`}
           </p>
           {tasks.map((task) => (
-            <div
-              key={task.id}
-              className="rounded-lg border border-emerald-200 bg-emerald-50 p-3"
-            >
-              <p className="text-sm font-medium text-gray-900">{task.title}</p>
-              <div className="flex items-center gap-3 mt-1">
-                {task.priority && (
-                  <span className="text-xs text-emerald-700 font-medium">
-                    {task.priority}
-                  </span>
-                )}
-                {task.due_date && (
-                  <p className="text-xs text-gray-500">
-                    Due: <time dateTime={task.due_date}>{task.due_date}</time>
-                  </p>
-                )}
-              </div>
-            </div>
+            <TaskChip key={task.id} task={task} variant="created" />
           ))}
         </div>
+      )}
+
+      {/* UPDATE_TASK_STATUS results */}
+      {intent === "UPDATE_TASK_STATUS" && tasks.length > 0 && (
+        <div role="region" aria-label="Updated task" className="space-y-2">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+            Task updated
+          </p>
+          {tasks.map((task) => (
+            <TaskChip key={task.id} task={task} variant="updated" />
+          ))}
+        </div>
+      )}
+
+      {intent === "UPDATE_TASK_STATUS" && tasks.length === 0 && finalTranscript && (
+        <p className="text-xs text-gray-400 italic">
+          No matching task found to update.
+        </p>
+      )}
+
+      {/* QUERY_TASKS results */}
+      {intent === "QUERY_TASKS" && tasks.length > 0 && (
+        <div role="region" aria-label={`${tasks.length} task${tasks.length > 1 ? "s" : ""} found`} className="space-y-2">
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+            {tasks.length === 1 ? "1 task found" : `${tasks.length} tasks found`}
+          </p>
+          {tasks.map((task) => (
+            <TaskChip key={task.id} task={task} variant="found" />
+          ))}
+        </div>
+      )}
+
+      {intent === "QUERY_TASKS" && tasks.length === 0 && finalTranscript && (
+        <p className="text-xs text-gray-400 italic">No tasks match your query.</p>
       )}
     </div>
   )

@@ -6,7 +6,7 @@ from app.models.note import Note
 from app.models.task import Task
 from app.repositories.note_repository import NoteRepository
 from app.repositories.task_repository import TaskRepository
-from app.schemas.common import IntentType, TaskStatus
+from app.schemas.common import IntentType, TaskPriority, TaskStatus
 from app.schemas.note_schema import NoteResponse, PaginatedNoteResponse
 from app.schemas.task_schema import TaskResponse
 from app.schemas.voice_schema import ActionResult, ExtractedIntent, TranscribeResponse
@@ -42,6 +42,12 @@ class NoteService:
                 created = await self._task_repo.create(task)
                 task_responses.append(TaskResponse.model_validate(created))
 
+        elif intent.intent == IntentType.UPDATE_TASK_STATUS:
+            task_responses = await self._handle_update_status(intent)
+
+        elif intent.intent == IntentType.QUERY_TASKS:
+            task_responses = await self._handle_query(intent)
+
         note = Note(
             raw_transcript=transcript,
             source=source,
@@ -54,6 +60,31 @@ class NoteService:
             intent=intent.intent,
             action=ActionResult(type=intent.intent.value, tasks=task_responses),
         )
+
+    async def _handle_update_status(
+        self, intent: ExtractedIntent
+    ) -> list[TaskResponse]:
+        if not intent.task_identifier or not intent.new_status:
+            return []
+        matches = await self._task_repo.search_by_title(intent.task_identifier)
+        if not matches:
+            return []
+        task = matches[0]
+        task.status = intent.new_status.value
+        updated = await self._task_repo.save(task)
+        return [TaskResponse.model_validate(updated)]
+
+    async def _handle_query(self, intent: ExtractedIntent) -> list[TaskResponse]:
+        f = intent.filters
+        status = TaskStatus(f.status.value) if f and f.status else None
+        priority = TaskPriority(f.priority.value) if f and f.priority else None
+        items, _ = await self._task_repo.list(
+            status=status,
+            priority=priority,
+            page=1,
+            page_size=10,
+        )
+        return [TaskResponse.model_validate(t) for t in items]
 
     async def get_note(self, note_id: str) -> NoteResponse:
         note = await self._note_repo.find_by_id(note_id)

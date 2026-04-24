@@ -58,6 +58,16 @@ class TaskRepository:
         )
         return list(rows.scalars().all()), total
 
+    async def search_by_title(self, keyword: str, limit: int = 5) -> list[Task]:
+        """Case-insensitive partial match on title — used by UPDATE_TASK_STATUS intent."""
+        result = await self._db.execute(
+            select(Task)
+            .where(Task.title.ilike(f"%{keyword}%"))
+            .order_by(Task.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def save(self, task: Task) -> Task:
         await self._db.commit()
         await self._db.refresh(task)
