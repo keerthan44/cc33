@@ -91,7 +91,7 @@ If the user also supplies a disambiguating date ("the dentist appointment from l
 
 The upsert is important: *"postpone my gym session to next month"* should work even if the gym session task doesn't exist yet.
 
-**Known risk:** semantic search can match the wrong task when titles are similar and no date disambiguator is provided. The mitigation is limiting results to top-3 and requiring a reasonably specific identifier. A user saying "the thing" will get whichever task is semantically closest — this is an acceptable limitation for a personal tool.
+**Known risk:** semantic search can match the wrong task when titles are similar and no date disambiguator is provided. The mitigation is limiting results to top-3 and requiring a reasonably specific identifier. A user saying "the thing" will get whichever task is semantically closest. This can be improved by using different embedding models or fine tuning one. 
 
 ---
 
@@ -113,43 +113,9 @@ Partial transcription uses `vad_filter=True` (voice activity detection) to skip 
 
 ---
 
-## Why these tools
-
-### faster-whisper over the OpenAI transcription API
-
-Local inference means no per-request transcription cost and no network round-trip for audio. `faster-whisper` is ~4× faster than the original Whisper implementation at equal accuracy. `tiny.en` is the default — fast enough for real-time partials on CPU. `base` or `small` give meaningfully better accuracy for accents or technical vocabulary.
-
-Trade-off: cold start on the first request (model load), and accuracy is lower than Whisper `large` or the hosted API.
-
-### pgvector over a dedicated vector database
-
-Semantic search lives in the same Postgres instance as the relational data — no external service to run, no sync to maintain, no separate connection pool. For a personal task manager this is the right call. The HNSW index (`vector_cosine_ops`) makes search fast enough at any realistic task count.
-
-Trade-off: dedicated vector databases (Pinecone, Weaviate) offer higher throughput at scale, filtered vector search, and metadata indexing. None of that matters here.
-
-### LangChain's `with_structured_output` over raw OpenAI SDK
-
-The raw SDK requires manually writing the JSON schema for `response_format` or `tools`. LangChain derives it automatically from the Pydantic model, which means the schema and the Python types are always in sync. Changing a field in `IntentAction` updates both the validation and the LLM constraint automatically.
-
-Trade-off: LangChain adds a dependency and occasionally changes its API. The abstraction is worth it for the structured output guarantee.
-
-### WebSockets over polling or SSE
-
-The client needs to send binary audio and receive multiple ordered events (partial, final, intent, tasks, done) over the same connection. SSE is unidirectional; polling adds latency and complexity. WebSockets are the right primitive.
-
-Trade-off: WebSockets are stateful and harder to scale horizontally behind a load balancer (requires sticky sessions or shared state). For a single-instance personal tool this is irrelevant.
-
-### Synchronous embeddings
-
-Embedding computation is awaited inline before the task is written to the database. The task is always fully searchable the moment it is created — there is no window where it exists without an embedding.
-
-Trade-off: the response takes an extra ~200–500 ms for the OpenAI embeddings API call. This is acceptable for a voice-driven flow where the user has already waited for STT and intent extraction.
-
----
-
 ## Known limitations
 
-### LLM classifies UPDATE as CREATE because it cannot see the database
+### LLM sometimes classifies UPDATE as CREATE because it cannot see the database
 
 **The bug:** The LLM decides intent purely from the transcript — it has no visibility into what tasks actually exist. If the user says *"finish the report"* and a task called *"Write Q2 report"* exists, the LLM may classify this as `CREATE_TASK` (creating a duplicate) rather than `UPDATE_TASK_STATUS` (marking the existing one done). There is no signal in the transcript alone that tells the model whether a matching task is already there.
 
@@ -195,17 +161,3 @@ LLM thinks about intent
 The similarity threshold (e.g. 0.85) is the key gate. A high score means the semantic match is confident enough to treat the utterance as an update; a low score means the user is describing something new. The threshold can be tuned on real utterances — lower catches more updates but risks false matches; higher is conservative but misses ambiguous references.
 
 This turns intent extraction from a single-shot classification into a two-turn agentic loop: the LLM reasons, queries, then decides — with the database as a grounding source rather than pure language inference.
-
-**Why it isn't implemented yet:** Tool calling requires multiple LLM round-trips and changes the LangChain chain from a simple prompt-to-schema pipeline into an agent loop. The latency cost is meaningful for a voice app where response time matters. The current heuristic (classify first, semantic-search second, upsert if nothing found) covers the common cases well enough for a personal tool.
-
----
-
-## What would change at scale
-
-| Concern | Current approach | At scale |
-|---|---|---|
-| Embedding backfill | Fire-and-forget asyncio task | Persistent job queue (Celery, ARQ) |
-| WebSocket scaling | Single uvicorn process | Sticky sessions or Redis pub/sub |
-| Vector search | Exact scan + HNSW | Dedicated vector DB with filtered search |
-| STT | Local Whisper | Hosted API or GPU inference server |
-| Multi-tenancy | None | Per-user task isolation, auth layer |
