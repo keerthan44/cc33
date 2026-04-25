@@ -97,19 +97,39 @@ The upsert is important: *"postpone my gym session to next month"* should work e
 
 ## Partial transcript streaming
 
-WebM audio is streamed as binary chunks over a WebSocket. Chunk 0 contains the EBML container header, so `b"".join(chunks)` is always valid WebM regardless of how many chunks have arrived. This means the accumulated audio can be transcribed at any point during recording.
+### Why `b"".join(chunks)` is always valid WebM
 
-On each new chunk, if no partial transcription is already running, one is fired in the background:
+The browser's `MediaRecorder` produces WebM. The first chunk it emits contains the **EBML header** — container metadata (codec, sample rate, channel layout). Every subsequent chunk is a raw audio cluster that cannot be decoded without the header. Because the header is always chunk 0 and chunks are accumulated in order, `b"".join(chunks)` is always a complete, decodable WebM file regardless of how many chunks have arrived. This is what makes mid-recording transcription possible.
+
+### Partial transcription flow
+
+On each new binary chunk the server appends it to the accumulator and, if no Whisper call is already in flight, fires one against the full accumulated audio:
 
 ```python
-task = asyncio.create_task(send_partial(b"".join(chunks)))
-_background_tasks.add(task)           # prevent GC
-task.add_done_callback(_background_tasks.discard)
+chunks.append(chunk)
+if not is_transcribing[0] and not stop_received:
+    is_transcribing[0] = True
+    asyncio.create_task(send_partial(b"".join(chunks)))
 ```
 
-The `_background_tasks` set is the key detail — Python's garbage collector can collect unreferenced `asyncio.Task` objects mid-execution. Storing a reference prevents silent task cancellation.
+The `is_transcribing` flag drops chunks that arrive while the previous Whisper call is still running — no queue builds up. `vad_filter=True` tells Whisper to skip silence so pauses don't produce empty partial results.
 
-Partial transcription uses `vad_filter=True` (voice activity detection) to skip silence, reducing the noise of empty partial results during pauses.
+### Final transcription — same WebSocket, no second API call
+
+When the user clicks stop, the client sends `{"type": "stop"}` as a text message over the same connection. The server handles it in the same receive loop:
+
+```
+binary chunk 0 (EBML header) ──► chunks=[c0]; Whisper(c0)        → partial
+binary chunk 1               ──► chunks=[c0,c1]; Whisper(c0+c1)  → partial
+binary chunk 2               ──► chunks=[c0,c1,c2]; (busy, skip)
+{"type":"stop"}              ──► Whisper(c0+c1+c2, vad_filter=False) → final
+                                 → GPT intent extraction
+                                 → DB write
+                                 ← {"type":"final"}, {"type":"actions"}, {"type":"done"}
+                                 [break — WebSocket closes]
+```
+
+`vad_filter=False` on the final pass captures every word rather than trimming silence. After the `done` message is sent the loop breaks and the WebSocket closes naturally — there is no follow-up HTTP call. The `POST /api/voice/transcribe` REST endpoint is a completely separate path for uploading pre-recorded audio files.
 
 ---
 
