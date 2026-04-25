@@ -105,14 +105,22 @@ class NoteService:
         query_embedding = await self._embedding.embed(action.task_identifier)
         matches = await self._task_repo.semantic_search(query_embedding, limit=3)
 
+        # task_due_date disambiguates when multiple candidates exist but must
+        # never eliminate all results — keep unfiltered matches if filter empties the list
         if matches and action.task_due_date:
-            matches = [m for m in matches if m.due_date == action.task_due_date]
+            filtered = [m for m in matches if m.due_date == action.task_due_date]
+            if filtered:
+                matches = filtered
 
         if not matches:
             matches = await self._task_repo.search_by_title(
                 action.task_identifier,
                 due_date=action.task_due_date,
             )
+            # Retry without date filter — the user may have stated a date to
+            # describe the task, not as a precise due-date match
+            if not matches and action.task_due_date:
+                matches = await self._task_repo.search_by_title(action.task_identifier)
 
         if not matches:
             task = Task(
