@@ -42,6 +42,9 @@ async def voice_stream(
     chunks: list[bytes] = []
     stop_received: bool = False
     is_transcribing: list[bool] = [False]
+    # True when a chunk arrived while Whisper was busy; triggers a re-run
+    # with the latest accumulated audio as soon as Whisper finishes.
+    pending: list[bool] = [False]
     total_bytes: int = 0
 
     async def send_partial(audio: bytes) -> None:
@@ -60,6 +63,14 @@ async def voice_stream(
             logger.error("Partial transcription error: %s", exc)
         finally:
             is_transcribing[0] = False
+            # If new chunks arrived while we were busy, immediately process
+            # the latest snapshot rather than waiting for the next chunk.
+            if pending[0] and not stop_received:
+                pending[0] = False
+                is_transcribing[0] = True
+                task = asyncio.create_task(send_partial(b"".join(chunks)))
+                _partial_tasks.add(task)
+                task.add_done_callback(_partial_tasks.discard)
 
     try:
         while True:
@@ -76,6 +87,8 @@ async def voice_stream(
                     task = asyncio.create_task(send_partial(b"".join(chunks)))
                     _partial_tasks.add(task)
                     task.add_done_callback(_partial_tasks.discard)
+                elif is_transcribing[0]:
+                    pending[0] = True
             elif "text" in message:
                 data = json.loads(message["text"])
                 if data.get("type") == "stop" and not stop_received:

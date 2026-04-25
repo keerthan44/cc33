@@ -103,16 +103,29 @@ The browser's `MediaRecorder` produces WebM. The first chunk it emits contains t
 
 ### Partial transcription flow
 
-On each new binary chunk the server appends it to the accumulator and, if no Whisper call is already in flight, fires one against the full accumulated audio:
+On each new binary chunk the server appends it to the accumulator. If Whisper is idle it fires immediately; if Whisper is busy it sets a `pending` flag instead of dropping the chunk:
 
 ```python
 chunks.append(chunk)
-if not is_transcribing[0] and not stop_received:
+if not is_transcribing[0]:
     is_transcribing[0] = True
     asyncio.create_task(send_partial(b"".join(chunks)))
+elif is_transcribing[0]:
+    pending[0] = True   # new audio arrived; re-run when current call finishes
 ```
 
-The `is_transcribing` flag drops chunks that arrive while the previous Whisper call is still running — no queue builds up. `vad_filter=True` tells Whisper to skip silence so pauses don't produce empty partial results.
+When Whisper finishes it checks `pending` and immediately re-runs against the latest accumulated snapshot:
+
+```python
+finally:
+    is_transcribing[0] = False
+    if pending[0] and not stop_received:
+        pending[0] = False
+        is_transcribing[0] = True
+        asyncio.create_task(send_partial(b"".join(chunks)))
+```
+
+This is better than a pure skip (which freezes the partial transcript until the next chunk arrives 2 s later) and better than a full queue (which would process stale intermediate snapshots). At most one re-run is ever pending — and it always uses the freshest audio. `vad_filter=True` tells Whisper to skip silence so pauses don't produce empty partial results.
 
 ### Final transcription — same WebSocket, no second API call
 
