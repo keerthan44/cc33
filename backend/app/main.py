@@ -12,13 +12,13 @@ from app.api.routes import (
 )
 from app.core.config import settings
 from app.core.database import init_db
-from app.services.stt_service import STTService
+from app.core.dependencies import init_services
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
-    STTService().get_model()
+    init_services()
     yield
 
 
