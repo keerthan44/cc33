@@ -51,7 +51,7 @@ First build takes 3–5 minutes (Python deps, npm packages). Subsequent starts a
 | | URL |
 |---|---|
 | App | http://localhost:3000 |
-| API docs | http://localhost:8000/docs |
+| API docs (FastAPI) | http://localhost:8000/docs |
 | Health | http://localhost:8000/api/health |
 
 > **First STT call is slow** — faster-whisper downloads the Whisper model (~75 MB for `tiny.en`) on first use. All subsequent calls are fast.
@@ -73,19 +73,27 @@ First build takes 3–5 minutes (Python deps, npm packages). Subsequent starts a
 
 ## Test without a mic
 
-```bash
-# Health check
-curl http://localhost:8000/api/health
+The backend is built with FastAPI — interactive API docs with request/response schemas are available at **http://localhost:8000/docs**.
 
-# Create a task via text
+**Health check**
+```bash
+curl http://localhost:8000/api/health
+```
+
+**Create a task via text**
+```bash
 curl -X POST http://localhost:8000/api/notes \
   -H "Content-Type: application/json" \
   -d '{"raw_transcript": "remind me to call the dentist tomorrow", "source": "text"}'
+```
 
-# List tasks
+**List tasks**
+```bash
 curl http://localhost:8000/api/tasks
+```
 
-# Upload a wav file
+**Upload a wav file**
+```bash
 curl -X POST http://localhost:8000/api/voice/transcribe \
   -F "file=@samples/sample.wav"
 ```
