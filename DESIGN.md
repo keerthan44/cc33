@@ -71,7 +71,7 @@ On total failure, the system falls back to `GENERAL_NOTE`. The transcript is **a
 
 When a user says *"mark the doctor thing as done"*, the system needs to find the task titled *"Dentist appointment"*.
 
-**At creation time:** The task's `title + description` is embedded with `text-embedding-3-small` and stored as a `vector(1536)` column in PostgreSQL via pgvector. This runs as a background `asyncio.Task` with its own DB session so it doesn't block the request.
+**At creation time:** The task's `title + description` is embedded with `text-embedding-3-small` and stored as a `vector(1536)` column in PostgreSQL via pgvector. The embedding is computed inline before the `INSERT`, so the task is always fully searchable by the time the response is returned.
 
 **At update time:** The natural-language identifier ("the doctor thing") is embedded and compared via cosine distance:
 
@@ -139,11 +139,11 @@ The client needs to send binary audio and receive multiple ordered events (parti
 
 Trade-off: WebSockets are stateful and harder to scale horizontally behind a load balancer (requires sticky sessions or shared state). For a single-instance personal tool this is irrelevant.
 
-### asyncio background tasks for embeddings
+### Synchronous embeddings
 
-Embedding computation happens after the task is created and the response is returned to the user. It runs as a fire-and-forget `asyncio.Task` with its own DB session. This keeps the request latency low — the user doesn't wait for the embedding API call.
+Embedding computation is awaited inline before the task is written to the database. The task is always fully searchable the moment it is created — there is no window where it exists without an embedding.
 
-Trade-off: if the server restarts before the background task completes, the embedding is lost. The ILIKE fallback in semantic search means the task is still findable; it just won't match natural-language queries until the embedding is backfilled on the next update.
+Trade-off: the response takes an extra ~200–500 ms for the OpenAI embeddings API call. This is acceptable for a voice-driven flow where the user has already waited for STT and intent extraction.
 
 ---
 

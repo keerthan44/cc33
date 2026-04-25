@@ -25,19 +25,3 @@ class EmbeddingService:
 
     async def embed(self, text: str) -> list[float]:
         return await asyncio.to_thread(self._embed_sync, text)
-
-    async def embed_task_background(self, task_id: str, text: str) -> None:
-        """Persist embedding using a fresh DB session (request session is already closed)."""
-        from app.core.database import AsyncSessionLocal
-        from app.repositories.task_repository import TaskRepository
-
-        async with AsyncSessionLocal() as session:
-            repo = TaskRepository(session)
-            try:
-                embedding = await self.embed(text)
-                task = await repo.find_by_id(task_id)
-                if task:
-                    task.embedding = embedding
-                    await repo.save(task)
-            except Exception as exc:
-                logger.error("Background embedding failed for task %s: %s", task_id, exc)

@@ -1,4 +1,3 @@
-import asyncio
 import json as json_module
 from datetime import date
 
@@ -15,14 +14,6 @@ from app.schemas.voice_schema import ActionResult, IntentAction, TranscribeRespo
 from app.services.embedding_service import EmbeddingService
 from app.services.intent_service import IntentService
 
-_background_tasks: set[asyncio.Task] = set()
-
-
-def _fire_background(coro) -> None:
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
 
 class NoteService:
     def __init__(
@@ -36,6 +27,11 @@ class NoteService:
         self._task_repo = task_repo
         self._intent = intent_service
         self._embedding = embedding
+
+    async def _embed_task(self, task: Task, title: str, description: str | None) -> None:
+        task.embedding = await self._embedding.embed(
+            EmbeddingService.embed_text(title, description)
+        )
 
     async def create_from_transcript(
         self, transcript: str, source: str
@@ -61,13 +57,8 @@ class NoteService:
                         priority=task_intent.priority.value if task_intent.priority else None,
                         due_date=task_intent.due_date,
                     )
+                    await self._embed_task(task, task_intent.title, task_intent.description)
                     created = await self._task_repo.create(task)
-                    _fire_background(
-                        self._embedding.embed_task_background(
-                            created.id,
-                            EmbeddingService.embed_text(task_intent.title, task_intent.description),
-                        )
-                    )
                     all_note_tasks.append(created)
                     task_responses.append(TaskResponse.model_validate(created))
 
@@ -108,7 +99,6 @@ class NoteService:
     ) -> tuple[list[TaskResponse], list[Task]]:
         if not action.task_identifier:
             return [], []
-        # At least one of new_status or new_due_date must be present
         if not action.new_status and not action.new_due_date:
             return [], []
 
@@ -125,19 +115,13 @@ class NoteService:
             )
 
         if not matches:
-            # Upsert: task doesn't exist yet — create it with the supplied fields
             task = Task(
                 title=action.task_identifier,
                 status=action.new_status.value if action.new_status else TaskStatus.PENDING.value,
                 due_date=action.new_due_date,
             )
+            await self._embed_task(task, action.task_identifier, None)
             created = await self._task_repo.create(task)
-            _fire_background(
-                self._embedding.embed_task_background(
-                    created.id,
-                    EmbeddingService.embed_text(action.task_identifier, None),
-                )
-            )
             return [TaskResponse.model_validate(created)], [created]
 
         task = matches[0]
