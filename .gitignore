@@ -1,0 +1,29 @@
+# Environment secrets
+.env
+.env.prod
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# SQLite dev artefacts
+*.db
+*.sqlite3
+
+# Node
+node_modules/
+.next/
+out/
+
+# Docker volumes
+postgres_data/
+
+# OS
+.DS_Store
+Thumbs.db

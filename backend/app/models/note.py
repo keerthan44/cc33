@@ -1,28 +1,35 @@
-import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models._utils import new_uuid
 from app.models.task import Task
 
 
-def _new_uuid() -> str:
-    return str(uuid.uuid4())
+note_tasks = Table(
+    "note_tasks",
+    Base.metadata,
+    Column("note_id", String, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True),
+    Column("task_id", String, ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Note(Base):
     __tablename__ = "notes"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=_new_uuid)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
     raw_transcript: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False, default="voice")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    task_id: Mapped[str | None] = mapped_column(
-        String, ForeignKey("tasks.id"), nullable=True
-    )
+    actions_json: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    task: Mapped[Task | None] = relationship("Task", back_populates="notes")
+    tasks: Mapped[list[Task]] = relationship("Task", secondary=note_tasks)
+
+    __table_args__ = (
+        Index("ix_notes_source", "source"),
+        Index("ix_notes_created_at", "created_at"),
+    )

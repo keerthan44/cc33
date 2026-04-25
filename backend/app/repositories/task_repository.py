@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,7 +86,21 @@ class TaskRepository:
         )
         return list(result.scalars().all())
 
+    async def semantic_search(
+        self,
+        query_embedding: list[float],
+        limit: int = 5,
+    ) -> list[Task]:
+        result = await self._db.execute(
+            select(Task)
+            .where(Task.embedding.isnot(None))
+            .order_by(Task.embedding.cosine_distance(query_embedding))
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def save(self, task: Task) -> Task:
+        task.updated_at = datetime.now(timezone.utc)
         await self._db.commit()
         await self._db.refresh(task)
         return task
