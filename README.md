@@ -16,13 +16,13 @@ AI-powered voice note-taking and task management. Speak naturally — Whisper tr
 ### 1 — Clone
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/keerthan44/cc33.git
 cd cc33
 ```
 
 ### 2 — Add your API key
 
-`backend/.env.prod` only needs one change:
+`backend/.env.prod` only needs one change. Get this from .env.prod.example:
 
 ```bash
 OPENAI_API_KEY=sk-...          # ← only thing you need to set
@@ -33,7 +33,7 @@ WHISPER_COMPUTE_TYPE=int8
 CORS_ORIGINS=["http://localhost:3000"]
 ```
 
-`frontend/.env.prod` is already configured and needs no changes:
+`frontend/.env.prod` is already configured and needs no changes. Get this from the .env.prod.example:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -88,14 +88,6 @@ curl http://localhost:8000/api/tasks
 # Upload a wav file
 curl -X POST http://localhost:8000/api/voice/transcribe \
   -F "file=@samples/sample.wav"
-```
-
----
-
-## Run tests
-
-```bash
-docker compose exec backend pytest tests/ -v
 ```
 
 ---
