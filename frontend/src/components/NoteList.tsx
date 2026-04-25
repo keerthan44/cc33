@@ -2,6 +2,8 @@
 
 import { useEffect } from "react"
 import { useNotes } from "@/hooks/useNotes"
+import { ActionSection, TaskChip } from "@/components/TranscriptDisplay"
+import type { ActionResult } from "@/lib/types"
 
 interface NoteListProps {
   refreshTrigger?: number
@@ -12,7 +14,7 @@ export function NoteList({ refreshTrigger = 0 }: NoteListProps) {
 
   useEffect(() => {
     if (refreshTrigger > 0) refetch()
-  }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshTrigger, refetch])
 
   return (
     <section aria-labelledby="notes-heading">
@@ -49,24 +51,50 @@ export function NoteList({ refreshTrigger = 0 }: NoteListProps) {
         <p className="text-sm text-gray-400 text-center py-6">No notes yet.</p>
       )}
 
-      <ul className="space-y-2" aria-label="Note list">
-        {notes.map((note) => (
-          <li
-            key={note.id}
-            className="rounded-lg border border-gray-100 bg-gray-50 p-3"
-          >
-            <p className="text-xs text-gray-500 mb-1">
-              <time dateTime={note.created_at}>
-                {new Date(note.created_at).toLocaleString()}
-              </time>
-              {" · "}
-              <span className="capitalize">{note.source}</span>
-            </p>
-            <p className="text-sm text-gray-800 line-clamp-3">
-              {note.raw_transcript}
-            </p>
-          </li>
-        ))}
+      <ul className="space-y-3" aria-label="Note list">
+        {notes.map((note) => {
+          const actions: ActionResult[] = note.note_actions ?? []
+
+          return (
+            <li
+              key={note.id}
+              className="rounded-lg border border-gray-100 bg-gray-50 p-4"
+            >
+              <p className="text-xs text-gray-500 mb-1">
+                <time dateTime={note.created_at}>
+                  {new Date(note.created_at).toLocaleString()}
+                </time>
+                {" · "}
+                <span className="capitalize">{note.source}</span>
+              </p>
+              <p className="text-sm text-gray-800 mb-3">
+                {note.raw_transcript}
+              </p>
+
+              {actions.length > 0 ? (
+                <div
+                  className="flex gap-3 flex-wrap"
+                  role="region"
+                  aria-label="Task results for this note"
+                >
+                  {actions.map((action, i) => (
+                    <div key={i} className="flex-1 min-w-[160px]">
+                      <ActionSection action={action} />
+                    </div>
+                  ))}
+                </div>
+              ) : note.tasks.length > 0 ? (
+                <div className="flex gap-3 flex-wrap" aria-label="Associated tasks">
+                  {note.tasks.map((task) => (
+                    <div key={task.id} className="flex-1 min-w-[160px]">
+                      <TaskChip task={task} variant="created" />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

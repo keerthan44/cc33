@@ -35,7 +35,7 @@ export function TaskList({ refreshTrigger = 0 }: TaskListProps) {
 
   useEffect(() => {
     if (refreshTrigger > 0) refetch()
-  }, [refreshTrigger]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshTrigger, refetch])
 
   return (
     <section aria-labelledby="tasks-heading">

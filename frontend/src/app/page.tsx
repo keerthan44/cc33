@@ -14,8 +14,7 @@ export default function DashboardPage() {
     status,
     partialText,
     finalTranscript,
-    intent,
-    tasks,
+    actions,
     error,
     start,
     stop,
@@ -26,11 +25,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (prevStatus.current !== "done" && status === "done") {
-      // Delay so the backend DB write is committed before we fetch
       const timer = setTimeout(
         () => setRefreshTrigger((n) => n + 1),
         REFRESH_DELAY_MS,
       )
+      prevStatus.current = status
       return () => clearTimeout(timer)
     }
     prevStatus.current = status
@@ -45,7 +44,6 @@ export default function DashboardPage() {
         </p>
       </header>
 
-      {/* Top row: mic + tasks side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-gray-700 mb-6">Record</h2>
@@ -54,8 +52,7 @@ export default function DashboardPage() {
             <TranscriptDisplay
               partialText={partialText}
               finalTranscript={finalTranscript}
-              intent={intent}
-              tasks={tasks}
+              actions={actions}
               error={error}
             />
           </div>
@@ -66,7 +63,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Full-width notes table below */}
       <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <NoteList refreshTrigger={refreshTrigger} />
       </div>

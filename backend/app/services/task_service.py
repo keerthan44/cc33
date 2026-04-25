@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from datetime import date
 
 from fastapi import HTTPException
@@ -11,11 +13,23 @@ from app.schemas.task_schema import (
     TaskResponse,
     TaskUpdate,
 )
+from app.services.embedding_service import EmbeddingService
+
+logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_background(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 class TaskService:
-    def __init__(self, repository: TaskRepository) -> None:
+    def __init__(self, repository: TaskRepository, embedding: EmbeddingService) -> None:
         self._repo = repository
+        self._embedding = embedding
 
     async def create_task(self, data: TaskCreate) -> TaskResponse:
         task = Task(
@@ -26,6 +40,11 @@ class TaskService:
             due_date=data.due_date,
         )
         created = await self._repo.create(task)
+        _fire_background(
+            self._embedding.embed_task_background(
+                created.id, EmbeddingService.embed_text(data.title, data.description)
+            )
+        )
         return TaskResponse.model_validate(created)
 
     async def get_task(self, task_id: str) -> TaskResponse:
@@ -64,14 +83,18 @@ class TaskService:
         task = await self._repo.find_by_id(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        for field, value in data.model_dump(exclude_none=True).items():
-            if field == "status" and isinstance(value, TaskStatus):
-                task.status = value.value
-            elif field == "priority" and isinstance(value, TaskPriority):
-                task.priority = value.value
-            else:
-                setattr(task, field, value)
+        title_changed = data.title is not None and data.title != task.title
+        desc_changed = data.description is not None and data.description != task.description
+        for field, value in data.model_dump(mode="json", exclude_none=True).items():
+            setattr(task, field, value)
         updated = await self._repo.save(task)
+        if title_changed or desc_changed:
+            _fire_background(
+                self._embedding.embed_task_background(
+                    updated.id,
+                    EmbeddingService.embed_text(updated.title, updated.description),
+                )
+            )
         return TaskResponse.model_validate(updated)
 
     async def delete_task(self, task_id: str) -> None:

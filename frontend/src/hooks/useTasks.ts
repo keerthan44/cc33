@@ -37,23 +37,23 @@ export function useTasks(filters: TaskFilters = {}) {
     fetchTasks()
   }, [fetchTasks])
 
-  const updateTask = async (id: string, data: Partial<Task>): Promise<Task> => {
+  const updateTask = useCallback(async (id: string, data: Partial<Task>): Promise<Task> => {
     const updated = await taskService.update(id, data)
     setState((s) => ({
       ...s,
       tasks: s.tasks.map((t) => (t.id === id ? updated : t)),
     }))
     return updated
-  }
+  }, [])
 
-  const deleteTask = async (id: string): Promise<void> => {
+  const deleteTask = useCallback(async (id: string): Promise<void> => {
     await taskService.delete(id)
     setState((s) => ({
       ...s,
       tasks: s.tasks.filter((t) => t.id !== id),
       total: s.total - 1,
     }))
-  }
+  }, [])
 
   return { ...state, refetch: fetchTasks, updateTask, deleteTask }
 }

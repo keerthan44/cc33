@@ -7,29 +7,37 @@ from langchain_openai import ChatOpenAI
 
 from app.core.config import settings
 from app.schemas.common import IntentType
-from app.schemas.voice_schema import ExtractedIntent
+from app.schemas.voice_schema import ExtractedIntent, IntentAction
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are an intent extraction engine for a voice note-taking app. "
-    "Today is {today}. Resolve all relative dates (e.g. 'tomorrow', 'next Friday') "
-    "to absolute YYYY-MM-DD dates. "
-    "Classify the overall intent as one of: CREATE_TASK, UPDATE_TASK_STATUS, QUERY_TASKS, GENERAL_NOTE. "
+    "Today is {today}. Resolve ALL relative dates (e.g. 'tomorrow', 'next Friday', "
+    "'three years from now') to absolute YYYY-MM-DD dates. "
+    "The user may express MULTIPLE intents in a single utterance. "
+    "Extract ALL intents and put each distinct intent into its own IntentAction in the actions array. "
+    "Each IntentAction has an intent field: CREATE_TASK, UPDATE_TASK_STATUS, QUERY_TASKS, or GENERAL_NOTE. "
     "For CREATE_TASK: extract EVERY distinct task the user mentions into the tasks array — "
     "even if they mention two, three, or more things to do, each becomes its own TaskIntent. "
     "Never merge multiple actions into one task. "
-    "For UPDATE_TASK_STATUS: set task_identifier to the keyword that names the task. "
+    "For UPDATE_TASK_STATUS: use this intent for ANY modification to an existing task — "
+    "changing its status (mark done, cancel, start) OR rescheduling/postponing its due date. "
+    "Set task_identifier to the keyword that names the task (e.g. 'math homework', 'dentist'). "
+    "Set new_status if the user is changing the status (PENDING, IN_PROGRESS, COMPLETED, CANCELLED). "
+    "Set new_due_date if the user is rescheduling or postponing (e.g. 'postpone to next month', "
+    "'move to three years from now'). "
     "If the user also mentions a date to identify WHICH task they mean "
-    "(e.g. 'the dentist appointment tomorrow'), resolve that date and put it in task_due_date — "
-    "this is used to disambiguate between tasks with similar names, not to change the due date. "
+    "(e.g. 'the dentist appointment that was due today'), resolve that date and put it in task_due_date — "
+    "this disambiguates between tasks with similar names; it is NOT the new due date. "
+    "If the task might not exist yet, still use UPDATE_TASK_STATUS — the backend will create it. "
     "For QUERY_TASKS: populate the filters object with any combination of: "
-    "keyword (partial title text — e.g. 'dentist', 'PR', 'meeting'), "
-    "status, priority, due_before, due_after. "
-    "Use keyword when the user names or describes a specific task without knowing its exact title. "
-    "The keyword drives a partial-text search so the DB returns the closest matching rows. "
+    "keyword (partial title text), status, priority, due_before, due_after. "
+    "If the user asks about multiple statuses separately (e.g. 'pending tasks' and 'completed tasks'), "
+    "create a separate QUERY_TASKS IntentAction for each. "
     "For other intents the tasks array should be empty. "
-    "Return null for optional fields not mentioned."
+    "Return null for optional fields not mentioned. "
+    "Always return at least one IntentAction in the actions array."
 )
 
 
@@ -72,4 +80,4 @@ class IntentService:
                     max_retries + 1,
                     exc,
                 )
-        return ExtractedIntent(intent=IntentType.GENERAL_NOTE)
+        return ExtractedIntent(actions=[IntentAction(intent=IntentType.GENERAL_NOTE)])

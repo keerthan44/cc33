@@ -1,3 +1,5 @@
+import asyncio
+import json as json_module
 from datetime import date
 
 from fastapi import HTTPException
@@ -6,11 +8,20 @@ from app.models.note import Note
 from app.models.task import Task
 from app.repositories.note_repository import NoteRepository
 from app.repositories.task_repository import TaskRepository
-from app.schemas.common import IntentType, TaskPriority, TaskStatus
+from app.schemas.common import IntentType, NoteSource, TaskPriority, TaskStatus
 from app.schemas.note_schema import NoteResponse, PaginatedNoteResponse
 from app.schemas.task_schema import TaskResponse
-from app.schemas.voice_schema import ActionResult, ExtractedIntent, TranscribeResponse
+from app.schemas.voice_schema import ActionResult, IntentAction, TranscribeResponse
+from app.services.embedding_service import EmbeddingService
 from app.services.intent_service import IntentService
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_background(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 class NoteService:
@@ -19,76 +30,133 @@ class NoteService:
         note_repo: NoteRepository,
         task_repo: TaskRepository,
         intent_service: IntentService,
+        embedding: EmbeddingService,
     ) -> None:
         self._note_repo = note_repo
         self._task_repo = task_repo
         self._intent = intent_service
+        self._embedding = embedding
 
     async def create_from_transcript(
         self, transcript: str, source: str
     ) -> TranscribeResponse:
-        intent: ExtractedIntent = await self._intent.extract_intent(transcript)
-        task_responses: list[TaskResponse] = []
+        extracted = await self._intent.extract_intent(transcript)
+        action_results: list[ActionResult] = []
+        all_note_tasks: list[Task] = []
 
-        if intent.intent == IntentType.CREATE_TASK and intent.tasks:
-            seen: set[str] = set()
-            for task_intent in intent.tasks:
-                key = task_intent.title.strip().lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                task = Task(
-                    title=task_intent.title,
-                    description=task_intent.description,
-                    status=TaskStatus.PENDING.value,
-                    priority=task_intent.priority.value if task_intent.priority else None,
-                    due_date=task_intent.due_date,
-                )
-                created = await self._task_repo.create(task)
-                task_responses.append(TaskResponse.model_validate(created))
+        for action in extracted.actions:
+            task_responses: list[TaskResponse] = []
 
-        elif intent.intent == IntentType.UPDATE_TASK_STATUS:
-            task_responses = await self._handle_update_status(intent)
+            if action.intent == IntentType.CREATE_TASK and action.tasks:
+                seen: set[str] = set()
+                for task_intent in action.tasks:
+                    key = task_intent.title.strip().lower()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    task = Task(
+                        title=task_intent.title,
+                        description=task_intent.description,
+                        status=TaskStatus.PENDING.value,
+                        priority=task_intent.priority.value if task_intent.priority else None,
+                        due_date=task_intent.due_date,
+                    )
+                    created = await self._task_repo.create(task)
+                    _fire_background(
+                        self._embedding.embed_task_background(
+                            created.id,
+                            EmbeddingService.embed_text(task_intent.title, task_intent.description),
+                        )
+                    )
+                    all_note_tasks.append(created)
+                    task_responses.append(TaskResponse.model_validate(created))
 
-        elif intent.intent == IntentType.QUERY_TASKS:
-            task_responses = await self._handle_query(intent)
+            elif action.intent == IntentType.UPDATE_TASK_STATUS:
+                task_responses, task_objs = await self._handle_update_status(action)
+                all_note_tasks.extend(task_objs)
+
+            elif action.intent == IntentType.QUERY_TASKS:
+                task_responses, task_objs = await self._handle_query(action)
+                all_note_tasks.extend(task_objs)
+
+            action_results.append(ActionResult(intent=action.intent, tasks=task_responses))
+
+        seen_task_ids: set[str] = set()
+        unique_note_tasks: list[Task] = []
+        for t in all_note_tasks:
+            if t.id not in seen_task_ids:
+                seen_task_ids.add(t.id)
+                unique_note_tasks.append(t)
 
         note = Note(
             raw_transcript=transcript,
             source=source,
-            task_id=task_responses[0].id if task_responses else None,
+            tasks=unique_note_tasks,
+            actions_json=json_module.dumps(
+                [a.model_dump(mode="json") for a in action_results]
+            ),
         )
         created_note = await self._note_repo.create(note)
 
         return TranscribeResponse(
             note=NoteResponse.model_validate(created_note),
-            intent=intent.intent,
-            action=ActionResult(type=intent.intent.value, tasks=task_responses),
+            actions=action_results,
         )
 
     async def _handle_update_status(
-        self, intent: ExtractedIntent
-    ) -> list[TaskResponse]:
-        if not intent.task_identifier or not intent.new_status:
-            return []
-        matches = await self._task_repo.search_by_title(
-            intent.task_identifier,
-            due_date=intent.task_due_date,
-        )
-        if not matches:
-            return []
-        task = matches[0]
-        task.status = intent.new_status.value
-        updated = await self._task_repo.save(task)
-        return [TaskResponse.model_validate(updated)]
+        self, action: IntentAction
+    ) -> tuple[list[TaskResponse], list[Task]]:
+        if not action.task_identifier:
+            return [], []
+        # At least one of new_status or new_due_date must be present
+        if not action.new_status and not action.new_due_date:
+            return [], []
 
-    async def _handle_query(self, intent: ExtractedIntent) -> list[TaskResponse]:
-        f = intent.filters
+        query_embedding = await self._embedding.embed(action.task_identifier)
+        matches = await self._task_repo.semantic_search(query_embedding, limit=3)
+
+        if matches and action.task_due_date:
+            matches = [m for m in matches if m.due_date == action.task_due_date]
+
+        if not matches:
+            matches = await self._task_repo.search_by_title(
+                action.task_identifier,
+                due_date=action.task_due_date,
+            )
+
+        if not matches:
+            # Upsert: task doesn't exist yet — create it with the supplied fields
+            task = Task(
+                title=action.task_identifier,
+                status=action.new_status.value if action.new_status else TaskStatus.PENDING.value,
+                due_date=action.new_due_date,
+            )
+            created = await self._task_repo.create(task)
+            _fire_background(
+                self._embedding.embed_task_background(
+                    created.id,
+                    EmbeddingService.embed_text(action.task_identifier, None),
+                )
+            )
+            return [TaskResponse.model_validate(created)], [created]
+
+        task = matches[0]
+        if action.new_status:
+            task.status = action.new_status.value
+        if action.new_due_date:
+            task.due_date = action.new_due_date
+        updated = await self._task_repo.save(task)
+        return [TaskResponse.model_validate(updated)], [updated]
+
+    async def _handle_query(
+        self, action: IntentAction
+    ) -> tuple[list[TaskResponse], list[Task]]:
+        f = action.filters
         keyword = f.keyword if f else None
         status = TaskStatus(f.status.value) if f and f.status else None
         priority = TaskPriority(f.priority.value) if f and f.priority else None
-        due_before = date.fromisoformat(f.due_before) if f and f.due_before else None
-        due_after = date.fromisoformat(f.due_after) if f and f.due_after else None
+        due_before = f.due_before if f else None
+        due_after = f.due_after if f else None
         items, _ = await self._task_repo.list(
             keyword=keyword,
             status=status,
@@ -98,7 +166,7 @@ class NoteService:
             page=1,
             page_size=10,
         )
-        return [TaskResponse.model_validate(t) for t in items]
+        return [TaskResponse.model_validate(t) for t in items], list(items)
 
     async def get_note(self, note_id: str) -> NoteResponse:
         note = await self._note_repo.find_by_id(note_id)
@@ -108,14 +176,14 @@ class NoteService:
 
     async def list_notes(
         self,
-        source: str | None = None,
+        source: NoteSource | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> PaginatedNoteResponse:
         items, total = await self._note_repo.list(
-            source=source,
+            source=source.value if source else None,
             date_from=date_from,
             date_to=date_to,
             page=page,

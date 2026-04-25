@@ -1,15 +1,20 @@
+import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Depends, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 
+from app.core.config import settings
 from app.core.dependencies import get_note_service, get_stt_service
+from app.schemas.common import NoteSource
 from app.schemas.voice_schema import TranscribeResponse
 from app.services.note_service import NoteService
 from app.services.stt_service import STTService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["voice"])
+
+_partial_tasks: set[asyncio.Task] = set()
 
 
 @router.post("/transcribe", response_model=TranscribeResponse, status_code=200)
@@ -19,8 +24,10 @@ async def transcribe_upload(
     note_service: NoteService = Depends(get_note_service),
 ) -> TranscribeResponse:
     audio_bytes = await file.read()
+    if len(audio_bytes) > settings.MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="Audio file too large")
     transcript = await stt.transcribe(audio_bytes)
-    return await note_service.create_from_transcript(transcript, "voice")
+    return await note_service.create_from_transcript(transcript, NoteSource.VOICE.value)
 
 
 @router.websocket("/stream")
@@ -31,38 +38,57 @@ async def voice_stream(
 ) -> None:
     await websocket.accept()
     await websocket.send_json({"type": "ready"})
+
     chunks: list[bytes] = []
     stop_received: bool = False
+    is_transcribing: list[bool] = [False]
+    total_bytes: int = 0
+
+    async def send_partial(audio: bytes) -> None:
+        try:
+            logger.debug("Partial transcription started (%d bytes)", len(audio))
+            text = await stt.transcribe(audio, vad_filter=True)
+            if text:
+                logger.debug("Partial transcript: %s", text)
+                try:
+                    await websocket.send_json({"type": "partial", "text": text})
+                except Exception as exc:
+                    logger.warning("Failed to send partial transcript: %s", exc)
+            else:
+                logger.debug("Partial transcription returned empty (VAD filtered or silence)")
+        except Exception as exc:
+            logger.error("Partial transcription error: %s", exc)
+        finally:
+            is_transcribing[0] = False
+
     try:
         while True:
             message = await websocket.receive()
             if "bytes" in message:
                 chunk: bytes = message["bytes"]
                 chunks.append(chunk)
-                # MediaRecorder sends fragmented WebM: only the first chunk has the
-                # EBML container header; subsequent chunks are raw cluster data and
-                # cannot be decoded by ffmpeg independently. We acknowledge receipt
-                # so the client knows we're still alive, but transcription only
-                # happens on the fully assembled audio at stop time.
-                await websocket.send_json({"type": "recording", "chunks": len(chunks)})
+                total_bytes += len(chunk)
+                if total_bytes > settings.MAX_AUDIO_BYTES:
+                    await websocket.send_json({"type": "error", "message": "Audio too large"})
+                    break
+                if not is_transcribing[0] and not stop_received:
+                    is_transcribing[0] = True
+                    task = asyncio.create_task(send_partial(b"".join(chunks)))
+                    _partial_tasks.add(task)
+                    task.add_done_callback(_partial_tasks.discard)
             elif "text" in message:
                 data = json.loads(message["text"])
                 if data.get("type") == "stop" and not stop_received:
                     stop_received = True
                     combined = b"".join(chunks)
                     final_text = await stt.transcribe(combined, vad_filter=False)
-                    result = await note_service.create_from_transcript(final_text, "voice")
+                    result = await note_service.create_from_transcript(final_text, NoteSource.VOICE.value)
                     await websocket.send_json({"type": "final", "transcript": final_text})
-                    await websocket.send_json({"type": "intent", "intent": result.intent.value})
+                    await websocket.send_json({"type": "note", "note": result.note.model_dump(mode="json")})
                     await websocket.send_json({
-                        "type": "note",
-                        "note": result.note.model_dump(mode="json"),
+                        "type": "actions",
+                        "actions": [a.model_dump(mode="json") for a in result.actions],
                     })
-                    if result.action.tasks:
-                        await websocket.send_json({
-                            "type": "tasks",
-                            "tasks": [t.model_dump(mode="json") for t in result.action.tasks],
-                        })
                     await websocket.send_json({"type": "done"})
                     break
     except WebSocketDisconnect:

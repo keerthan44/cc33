@@ -23,18 +23,18 @@ export interface Note {
   raw_transcript: string
   source: NoteSource
   created_at: string
-  task?: Task
+  tasks: Task[]
+  note_actions: ActionResult[]
 }
 
 export interface ActionResult {
-  type: string
+  intent: IntentType
   tasks: Task[]
 }
 
 export interface TranscribeResponse {
   note: Note
-  intent: IntentType
-  action: ActionResult
+  actions: ActionResult[]
 }
 
 export interface PaginatedResponse<T> {

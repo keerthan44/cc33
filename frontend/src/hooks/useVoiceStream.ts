@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { IntentType, Note, Task } from "@/lib/types"
+import type { ActionResult, Note } from "@/lib/types"
 
 export type StreamStatus = "idle" | "recording" | "processing" | "done" | "error"
 
@@ -9,8 +9,7 @@ interface StreamState {
   status: StreamStatus
   partialText: string
   finalTranscript: string
-  intent: IntentType | null
-  tasks: Task[]
+  actions: ActionResult[]
   note: Note | null
   error: string | null
 }
@@ -19,19 +18,16 @@ const INITIAL_STATE: StreamState = {
   status: "idle",
   partialText: "",
   finalTranscript: "",
-  intent: null,
-  tasks: [],
+  actions: [],
   note: null,
   error: null,
 }
 
 type WsMessage =
   | { type: "ready" }
-  | { type: "recording"; chunks: number }
   | { type: "partial"; text: string }
   | { type: "final"; transcript: string }
-  | { type: "intent"; intent: IntentType }
-  | { type: "tasks"; tasks: Task[] }
+  | { type: "actions"; actions: ActionResult[] }
   | { type: "note"; note: Note }
   | { type: "done" }
 
@@ -59,9 +55,6 @@ export function useVoiceStream() {
     }
 
     if (recorder.state !== "inactive") {
-      // Wait for the final ondataavailable flush before sending stop,
-      // otherwise the last audio chunk arrives at the server after the
-      // stop signal and gets dropped.
       recorder.onstop = sendStop
       recorder.stop()
     } else {
@@ -95,21 +88,14 @@ export function useVoiceStream() {
             recorder.start(2000)
             break
           }
-          case "recording":
-            // Server acknowledged a chunk; show a live counter as the partial indicator.
-            setState((s) => ({ ...s, partialText: `Recording… (${msg.chunks} chunks)` }))
-            break
           case "partial":
             setState((s) => ({ ...s, partialText: msg.text }))
             break
           case "final":
             setState((s) => ({ ...s, finalTranscript: msg.transcript, partialText: "" }))
             break
-          case "intent":
-            setState((s) => ({ ...s, intent: msg.intent }))
-            break
-          case "tasks":
-            setState((s) => ({ ...s, tasks: msg.tasks }))
+          case "actions":
+            setState((s) => ({ ...s, actions: msg.actions }))
             break
           case "note":
             setState((s) => ({ ...s, note: msg.note }))
@@ -122,6 +108,7 @@ export function useVoiceStream() {
 
       ws.onerror = () => {
         setState((s) => ({ ...s, status: "error", error: "WebSocket connection failed" }))
+        ws.close()
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Microphone access denied"

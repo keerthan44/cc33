@@ -4,10 +4,18 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import get_task_service
 from app.schemas.common import TaskPriority, TaskStatus
-from app.schemas.task_schema import PaginatedTaskResponse, TaskResponse, TaskUpdate
+from app.schemas.task_schema import PaginatedTaskResponse, TaskCreate, TaskResponse, TaskUpdate
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+@router.post("", response_model=TaskResponse, status_code=201)
+async def create_task(
+    data: TaskCreate,
+    service: TaskService = Depends(get_task_service),
+) -> TaskResponse:
+    return await service.create_task(data)
 
 
 @router.get("", response_model=PaginatedTaskResponse, status_code=200)

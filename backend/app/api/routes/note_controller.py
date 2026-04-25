@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import get_note_service
+from app.schemas.common import NoteSource
 from app.schemas.note_schema import NoteCreate, NoteResponse, PaginatedNoteResponse
 from app.schemas.voice_schema import TranscribeResponse
 from app.services.note_service import NoteService
@@ -15,12 +16,12 @@ async def create_note(
     body: NoteCreate,
     service: NoteService = Depends(get_note_service),
 ) -> TranscribeResponse:
-    return await service.create_from_transcript(body.raw_transcript, body.source)
+    return await service.create_from_transcript(body.raw_transcript, body.source.value)
 
 
 @router.get("", response_model=PaginatedNoteResponse, status_code=200)
 async def list_notes(
-    source: str | None = Query(default=None),
+    source: NoteSource | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     page: int = Query(default=1, ge=1),

@@ -33,6 +33,7 @@ export function TaskCard({ task, onUpdate, onDelete }: TaskCardProps) {
   const [status, setStatus] = useState<TaskStatus>(task.status)
   const [updating, setUpdating] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const handleStatusChange = async (next: TaskStatus) => {
     const previous = status
@@ -96,14 +97,35 @@ export function TaskCard({ task, onUpdate, onDelete }: TaskCardProps) {
           ))}
         </select>
 
-        <button
-          type="button"
-          onClick={() => onDelete(task.id)}
-          className="text-xs text-gray-400 hover:text-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded"
-          aria-label={`Delete task: ${task.title}`}
-        >
-          Delete
-        </button>
+        {confirmDelete ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onDelete(task.id)}
+              className="text-xs text-red-600 font-medium hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded"
+              aria-label={`Confirm delete task: ${task.title}`}
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded"
+              aria-label="Cancel delete"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="text-xs text-gray-400 hover:text-red-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded"
+            aria-label={`Delete task: ${task.title}`}
+          >
+            Delete
+          </button>
+        )}
       </div>
 
       {updateError && (
