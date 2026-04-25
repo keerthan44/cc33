@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { Task, TaskStatus } from "@/lib/types"
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -32,6 +32,10 @@ interface TaskCardProps {
 export function TaskCard({ task, onUpdate, onDelete }: TaskCardProps) {
   const [status, setStatus] = useState<TaskStatus>(task.status)
   const [updating, setUpdating] = useState(false)
+
+  useEffect(() => {
+    setStatus(task.status)
+  }, [task.status])
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
