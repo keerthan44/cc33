@@ -147,6 +147,59 @@ Trade-off: the response takes an extra ~200–500 ms for the OpenAI embeddings A
 
 ---
 
+## Known limitations
+
+### LLM classifies UPDATE as CREATE because it cannot see the database
+
+**The bug:** The LLM decides intent purely from the transcript — it has no visibility into what tasks actually exist. If the user says *"finish the report"* and a task called *"Write Q2 report"* exists, the LLM may classify this as `CREATE_TASK` (creating a duplicate) rather than `UPDATE_TASK_STATUS` (marking the existing one done). There is no signal in the transcript alone that tells the model whether a matching task is already there.
+
+**Why the current design has this problem:** Intent classification and database lookup are two separate steps. The LLM runs first and commits to an intent; the semantic search only runs afterward if the intent is already `UPDATE_TASK_STATUS`. If the LLM guessed wrong, the search never happens.
+
+**Ideal fix — tool calling with a score-gated confirmation loop:**
+
+Give the LLM a `search_tasks` tool it can call before committing to an intent:
+
+```python
+tools = [
+    {
+        "name": "search_tasks",
+        "description": "Search existing tasks by natural language query. "
+                       "Call this before deciding UPDATE vs CREATE.",
+        "parameters": {
+            "query": {"type": "string", "description": "Natural language description of the task"}
+        }
+    }
+]
+```
+
+The agent flow becomes:
+
+```
+User transcript
+      │
+      ▼
+LLM thinks about intent
+      │
+      ├─ suspects UPDATE ──► calls search_tasks("finish the report")
+      │                             │
+      │                       DB returns top match +
+      │                       cosine similarity score
+      │                             │
+      │                    score ≥ 0.85? ──► YES ──► UPDATE existing task
+      │                             │
+      │                            NO ──► CREATE new task
+      │
+      └─ clearly CREATE (no existing task implied) ──► CREATE directly
+```
+
+The similarity threshold (e.g. 0.85) is the key gate. A high score means the semantic match is confident enough to treat the utterance as an update; a low score means the user is describing something new. The threshold can be tuned on real utterances — lower catches more updates but risks false matches; higher is conservative but misses ambiguous references.
+
+This turns intent extraction from a single-shot classification into a two-turn agentic loop: the LLM reasons, queries, then decides — with the database as a grounding source rather than pure language inference.
+
+**Why it isn't implemented yet:** Tool calling requires multiple LLM round-trips and changes the LangChain chain from a simple prompt-to-schema pipeline into an agent loop. The latency cost is meaningful for a voice app where response time matters. The current heuristic (classify first, semantic-search second, upsert if nothing found) covers the common cases well enough for a personal tool.
+
+---
+
 ## What would change at scale
 
 | Concern | Current approach | At scale |
